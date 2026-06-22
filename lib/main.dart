@@ -29,7 +29,7 @@ class SijiRecord {
   final String key;
   final String date;
   final String round;
-  final List<List<int>> st; // 0=빈칸, 1=관중, 2=불발
+  final List<List<int>> st;
   final String diary;
   final int total;
 
@@ -74,6 +74,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _tabIndex = 0;
   List<SijiRecord> records = [];
+  SijiRecord? _loadedRecord; // 불러오기로 전달할 레코드
 
   @override
   void initState() {
@@ -116,19 +117,35 @@ class _MainScreenState extends State<MainScreen> {
     _saveRecords();
   }
 
+  // 불러오기: 레코드 전달 후 입력 탭으로 이동
+  void _loadRecord(SijiRecord record) {
+    setState(() {
+      _loadedRecord = record;
+      _tabIndex = 0;
+    });
+  }
+
+  void _clearLoadedRecord() {
+    setState(() {
+      _loadedRecord = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
         index: _tabIndex,
         children: [
-          InputTab(onSave: _addOrUpdateRecord),
+          InputTab(
+            onSave: _addOrUpdateRecord,
+            loadedRecord: _loadedRecord,
+            onLoadConsumed: _clearLoadedRecord,
+          ),
           RecordsTab(
             records: records,
             onDelete: _deleteRecord,
-            onLoad: (record) {
-              setState(() => _tabIndex = 0);
-            },
+            onLoad: _loadRecord,
           ),
           StatsTab(records: records),
         ],
@@ -138,7 +155,7 @@ class _MainScreenState extends State<MainScreen> {
         onTap: (i) => setState(() => _tabIndex = i),
         selectedItemColor: const Color(0xFF1D9E75),
         items: [
-          BottomNavigationBarItem(icon: Icon(Icons.edit), label: '입력'),
+          const BottomNavigationBarItem(icon: Icon(Icons.edit), label: '입력'),
           BottomNavigationBarItem(
             icon: Stack(
               children: [
@@ -163,7 +180,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             label: '저장기록',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: '통계'),
+          const BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: '통계'),
         ],
       ),
     );
@@ -173,8 +190,15 @@ class _MainScreenState extends State<MainScreen> {
 // 입력 탭
 class InputTab extends StatefulWidget {
   final Function(SijiRecord) onSave;
+  final SijiRecord? loadedRecord;
+  final VoidCallback onLoadConsumed;
 
-  const InputTab({super.key, required this.onSave});
+  const InputTab({
+    super.key,
+    required this.onSave,
+    this.loadedRecord,
+    required this.onLoadConsumed,
+  });
 
   @override
   State<InputTab> createState() => _InputTabState();
@@ -187,6 +211,25 @@ class _InputTabState extends State<InputTab> {
   final _diaryController = TextEditingController();
 
   static const sunNames = ['一巡', '二巡', '三巡', '四巡', '五巡', '六巡', '七巡', '八巡', '九巡'];
+
+  @override
+  void didUpdateWidget(InputTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 불러오기 레코드가 새로 들어오면 폼에 채움
+    if (widget.loadedRecord != null && widget.loadedRecord != oldWidget.loadedRecord) {
+      _fillFromRecord(widget.loadedRecord!);
+      widget.onLoadConsumed();
+    }
+  }
+
+  void _fillFromRecord(SijiRecord record) {
+    setState(() {
+      _selectedDate = DateTime.parse(record.date);
+      _round = int.tryParse(record.round) ?? 1;
+      _st = record.st.map((row) => List<int>.from(row)).toList();
+      _diaryController.text = record.diary;
+    });
+  }
 
   int _rowScore(int r) => _st[r].where((v) => v == 1).length;
   bool _rowHasAny(int r) => _st[r].any((v) => v != 0);
@@ -265,7 +308,6 @@ class _InputTabState extends State<InputTab> {
     return SafeArea(
       child: Column(
         children: [
-          // 헤더
           Container(
             color: const Color(0xFFF5C842),
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -274,7 +316,6 @@ class _InputTabState extends State<InputTab> {
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF4A3800))),
             ),
           ),
-          // 날짜 + 회차
           Container(
             color: const Color(0xFFF5F5F5),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -312,7 +353,7 @@ class _InputTabState extends State<InputTab> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonFormField<int>(
-                    initialValue: _round,
+                    value: _round,
                     decoration: InputDecoration(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -326,7 +367,6 @@ class _InputTabState extends State<InputTab> {
               ],
             ),
           ),
-          // 저장/새기록 버튼
           Container(
             color: const Color(0xFFF5F5F5),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -352,12 +392,10 @@ class _InputTabState extends State<InputTab> {
               ],
             ),
           ),
-          // 표
           Expanded(
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  // 헤더 행
                   Row(
                     children: [
                       _headerCell('순', width: 44),
@@ -370,7 +408,6 @@ class _InputTabState extends State<InputTab> {
                       _headerCell('합시', width: 40),
                     ],
                   ),
-                  // 데이터 행
                   for (int r = 0; r < 9; r++)
                     Row(
                       children: [
@@ -380,7 +417,6 @@ class _InputTabState extends State<InputTab> {
                         _totalCell(_rowHasAny(r) ? '${_cumTotal(r)}' : ''),
                       ],
                     ),
-                  // 총합계 행
                   Container(
                     color: const Color(0xFF5DCAA5),
                     child: Row(
@@ -408,7 +444,6 @@ class _InputTabState extends State<InputTab> {
                       ],
                     ),
                   ),
-                  // 습사일기
                   Container(
                     padding: const EdgeInsets.all(12),
                     child: Column(
@@ -445,7 +480,6 @@ class _InputTabState extends State<InputTab> {
   }
 
   Widget _headerCell(String text, {double? width}) {
-    final w = width;
     final cell = Container(
       height: 36,
       color: const Color(0xFF5DCAA5),
@@ -454,7 +488,7 @@ class _InputTabState extends State<InputTab> {
             style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF04342C), fontSize: 13)),
       ),
     );
-    return w != null ? SizedBox(width: w, child: cell) : Expanded(child: cell);
+    return width != null ? SizedBox(width: width, child: cell) : Expanded(child: cell);
   }
 
   Widget _sunCell(String text) => SizedBox(
@@ -542,13 +576,11 @@ class MissPainter extends CustomPainter {
       ..color = const Color(0xFF222222)
       ..strokeWidth = 2.2
       ..strokeCap = StrokeCap.round;
-    // 몸통
     canvas.drawLine(
       Offset(size.width * 0.75, size.height * 0.15),
       Offset(size.width * 0.25, size.height * 0.85),
       paint,
     );
-    // 짧은 날개
     paint.strokeWidth = 1.8;
     canvas.drawLine(
       Offset(size.width * 0.34, size.height * 0.41),
@@ -692,7 +724,7 @@ class _RecordsTabState extends State<RecordsTab> {
                     fontWeight: FontWeight.w600, fontSize: 15, color: Color(0xFF0F6E56))),
             const SizedBox(width: 8),
             TextButton(
-              onPressed: () { widget.onLoad(rec); },
+              onPressed: () => widget.onLoad(rec),
               child: const Text('불러오기', style: TextStyle(color: Color(0xFF0F6E56), fontSize: 12)),
             ),
             TextButton(
@@ -927,7 +959,6 @@ class _StatsTabState extends State<StatsTab> {
                     style: TextStyle(color: Colors.grey)),
               )
             else ...[
-              // 요약 카드
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(
@@ -941,7 +972,6 @@ class _StatsTabState extends State<StatsTab> {
                 ),
               ),
               const SizedBox(height: 16),
-              // 간단한 바 차트
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: _buildBarChart(filtered),
@@ -975,13 +1005,7 @@ class _StatsTabState extends State<StatsTab> {
   Widget _buildBarChart(List<SijiRecord> filtered) {
     Map<String, List<int>> data = {};
 
-    if (_type == 'monthly') {
-      for (int m = 1; m <= 12; m++) {
-        final key = '$m월';
-        final vals = filtered.where((r) => int.parse(r.date.split('-')[1]) == m).map((r) => r.total).toList();
-        data[key] = vals;
-      }
-    } else if (_type == 'avg') {
+    if (_type == 'monthly' || _type == 'avg') {
       for (int m = 1; m <= 12; m++) {
         final key = '$m월';
         final vals = filtered.where((r) => int.parse(r.date.split('-')[1]) == m).map((r) => r.total).toList();
@@ -995,7 +1019,7 @@ class _StatsTabState extends State<StatsTab> {
       }
     }
 
-    final maxVal = 45.0;
+    const maxVal = 45.0;
     final entries = data.entries.toList();
 
     return Column(
@@ -1030,7 +1054,7 @@ class _StatsTabState extends State<StatsTab> {
                       height: height,
                       margin: const EdgeInsets.symmetric(horizontal: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF5DCAA5).withValues(alpha: 0.8),
+                        color: Color.fromRGBO(93, 202, 165, 0.8),
                         borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(3),
                           topRight: Radius.circular(3),
