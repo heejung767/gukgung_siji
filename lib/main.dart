@@ -960,6 +960,11 @@ class _SeungdanTabState extends State<SeungdanTab> {
   int get _totalInputted => _st.fold(0,(s,row)=>s+row.where((v)=>v!=0).length);
   int get _remainingArrows => 45 - _totalInputted;
   int get _neededMore => _targetHits - _currentHits;
+  // 탈락까지 추가로 허용되는 불발 횟수 (남은 발수 중 빗나가도 되는 한계)
+  int get _allowedMisses {
+    final v = _remainingArrows - _neededMore;
+    return v < 0 ? 0 : v;
+  }
 
   int _rowScore(int r) => _st[r].where((v)=>v==1).length;
   bool _rowHasAny(int r) => _st[r].any((v)=>v!=0);
@@ -1051,17 +1056,38 @@ class _SeungdanTabState extends State<SeungdanTab> {
                 width: isFailing || isPassing ? 2 : 1,
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+            child: Column(
               children: [
-                _statusItem('${_currentHits}중', '현재 중수', const Color(0xFF0F6E56)),
-                Container(width: 1, height: 32, color: Colors.grey.shade300),
-                _statusItem('${_remainingArrows}발', '남은 발수', Colors.grey.shade700),
-                Container(width: 1, height: 32, color: Colors.grey.shade300),
-                _statusItem(
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _statusItem('${_currentHits}중', '현재 중수', const Color(0xFF0F6E56)),
+                    Container(width: 1, height: 32, color: Colors.grey.shade300),
+                    _statusItem('${_remainingArrows}발', '남은 발수', Colors.grey.shade700),
+                    Container(width: 1, height: 32, color: Colors.grey.shade300),
+                    _statusItem(
+                      isFailing ? '0발' : '${_allowedMisses}발',
+                      '허용 불발',
+                      isFailing
+                          ? Colors.red
+                          : _allowedMisses <= 2
+                              ? Colors.red.shade400
+                              : _allowedMisses <= 5
+                                  ? Colors.orange.shade700
+                                  : Colors.grey.shade700,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(height: 1, color: Colors.grey.shade200),
+                const SizedBox(height: 8),
+                Text(
                   isFailing ? '탈락 확정' : _neededMore <= 0 ? '목표 달성!' : '${_neededMore}중 더 필요',
-                  '현황',
-                  isFailing ? Colors.red : _neededMore <= 0 ? const Color(0xFF1D9E75) : Colors.orange.shade700,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: isFailing ? Colors.red : _neededMore <= 0 ? const Color(0xFF1D9E75) : Colors.orange.shade700,
+                  ),
                 ),
               ],
             ),
