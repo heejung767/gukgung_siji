@@ -88,6 +88,8 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _tabIndex = 0;
   List<SijiRecord> records = [];
+  SijiRecord? _recordToLoad;
+  int _loadCounter = 0;
 
   @override
   void initState() {
@@ -131,11 +133,19 @@ class _MainScreenState extends State<MainScreen> {
       body: IndexedStack(
         index: _tabIndex,
         children: [
-          InputTab(onSave: _addOrUpdateRecord),
+          InputTab(
+            key: ValueKey('input_$_loadCounter'),
+            onSave: _addOrUpdateRecord,
+            loadRecord: _recordToLoad,
+          ),
           RecordsTab(
             records: records,
             onDelete: _deleteRecord,
-            onLoad: (record) => setState(() => _tabIndex = 0),
+            onLoad: (record) => setState(() {
+              _recordToLoad = record;
+              _loadCounter++;
+              _tabIndex = 0;
+            }),
           ),
           StatsTab(records: records),
           const SeungdanTab(),
@@ -266,7 +276,8 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
 // ══════════════════════════════════════════
 class InputTab extends StatefulWidget {
   final Function(SijiRecord) onSave;
-  const InputTab({super.key, required this.onSave});
+  final SijiRecord? loadRecord;
+  const InputTab({super.key, required this.onSave, this.loadRecord});
 
   @override
   State<InputTab> createState() => _InputTabState();
@@ -280,6 +291,18 @@ class _InputTabState extends State<InputTab> {
   bool _videoBusy = false;
 
   static const sunNames = ['一巡','二巡','三巡','四巡','五巡','六巡','七巡','八巡','九巡'];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.loadRecord != null) {
+      final r = widget.loadRecord!;
+      _selectedDate = DateTime.tryParse(r.date) ?? DateTime.now();
+      _round = int.tryParse(r.round) ?? 1;
+      _st = r.st.map((row) => List<int>.from(row)).toList();
+      _diaryController.text = r.diary;
+    }
+  }
 
   int _rowScore(int r) => _st[r].where((v) => v == 1).length;
   bool _rowHasAny(int r) => _st[r].any((v) => v != 0);
@@ -368,8 +391,7 @@ class _InputTabState extends State<InputTab> {
           Container(
             color: const Color(0xFFF5F5F5),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
+            child: Row(              children: [
                 Expanded(
                   flex: 2,
                   child: GestureDetector(
@@ -769,7 +791,6 @@ class _RecordsTabState extends State<RecordsTab> {
     );
   }
 }
-
 // ══════════════════════════════════════════
 // 통계 탭
 // ══════════════════════════════════════════

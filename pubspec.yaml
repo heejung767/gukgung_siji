@@ -15,7 +15,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.2+6
+version: 1.0.3+7
 environment:
   sdk: ^3.12.2
 # Dependencies specify other packages that your package needs in order to work.
@@ -82,7 +82,7 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 
-# 앱 아이콘 자동 생성 설정 (Codemagic 빌드 시 자동 적용됨)
+# ???�이�??�동 ?�성 ?�정 (Codemagic 빌드 ???�동 ?�용??
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
