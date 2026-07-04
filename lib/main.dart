@@ -949,9 +949,9 @@ class _SeungdanTabState extends State<SeungdanTab> {
   List<List<int>> _st = List.generate(9, (_) => List.filled(5, 0));
 
   static const Map<String,int> _gradeTargets = {
-    '1급':22,'초단':24,'2단':26,'3단':28,'4단':30,'5단':32,'6단':34,'7단':36,'8단':38,'9단':40,
+    '1급':22,'초단':24,'2단':26,'3단':28,'4단':30,'5단':31,'6단':33,'7단':35,'8단':37,'9단':39,
   };
-  static const Map<String,int> _elderlyTargets = {'1급':18,'초단':20};
+  static const Map<String,int> _elderlyTargets = {'1급':16,'초단':18};
   static const List<String> _gradeList = ['1급','초단','2단','3단','4단','5단','6단','7단','8단','9단'];
   static const List<String> _sunNames = ['一巡','二巡','三巡','四巡','五巡','六巡','七巡','八巡','九巡'];
 
