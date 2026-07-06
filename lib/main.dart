@@ -50,6 +50,11 @@ class SijiRecord {
   final List<List<int>> st;
   final String diary;
   final int total;
+  // 승단 기록 여부 및 관련 정보 (일반 기록은 기본값 유지, 기존 저장 기록과 호환됨)
+  final bool isSeungdan;
+  final String? targetGrade;
+  final bool? isElderly;
+  final bool? passed;
 
   SijiRecord({
     required this.key,
@@ -58,11 +63,19 @@ class SijiRecord {
     required this.st,
     required this.diary,
     required this.total,
+    this.isSeungdan = false,
+    this.targetGrade,
+    this.isElderly,
+    this.passed,
   });
 
   Map<String, dynamic> toJson() => {
         'key': key, 'date': date, 'round': round,
         'st': st, 'diary': diary, 'total': total,
+        'isSeungdan': isSeungdan,
+        'targetGrade': targetGrade,
+        'isElderly': isElderly,
+        'passed': passed,
       };
 
   factory SijiRecord.fromJson(Map<String, dynamic> json) => SijiRecord(
@@ -72,6 +85,10 @@ class SijiRecord {
             .toList(),
         diary: json['diary'] ?? '',
         total: json['total'],
+        isSeungdan: json['isSeungdan'] ?? false,
+        targetGrade: json['targetGrade'],
+        isElderly: json['isElderly'],
+        passed: json['passed'],
       );
 }
 
@@ -90,6 +107,8 @@ class _MainScreenState extends State<MainScreen> {
   List<SijiRecord> records = [];
   SijiRecord? _recordToLoad;
   int _loadCounter = 0;
+  SijiRecord? _seungdanRecordToLoad;
+  int _seungdanLoadCounter = 0;
 
   @override
   void initState() {
@@ -142,13 +161,23 @@ class _MainScreenState extends State<MainScreen> {
             records: records,
             onDelete: _deleteRecord,
             onLoad: (record) => setState(() {
-              _recordToLoad = record;
-              _loadCounter++;
-              _tabIndex = 0;
+              if (record.isSeungdan) {
+                _seungdanRecordToLoad = record;
+                _seungdanLoadCounter++;
+                _tabIndex = 3;
+              } else {
+                _recordToLoad = record;
+                _loadCounter++;
+                _tabIndex = 0;
+              }
             }),
           ),
           StatsTab(records: records),
-          const SeungdanTab(),
+          SeungdanTab(
+            key: ValueKey('seungdan_$_seungdanLoadCounter'),
+            onSave: _addOrUpdateRecord,
+            loadRecord: _seungdanRecordToLoad,
+          ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -255,18 +284,41 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: _ready && _vc != null
-          ? Center(
-              child: FittedBox(
-                fit: BoxFit.cover,
-                child: SizedBox(
-                  width: _vc!.value.size.width,
-                  height: _vc!.value.size.height,
-                  child: VideoPlayer(_vc!),
+      body: Stack(
+        children: [
+          _ready && _vc != null
+              ? Center(
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: _vc!.value.size.width,
+                      height: _vc!.value.size.height,
+                      child: VideoPlayer(_vc!),
+                    ),
+                  ),
+                )
+              : const Center(child: CircularProgressIndicator(color: Colors.white)),
+          Positioned(
+            top: 0, left: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: GestureDetector(
+                  onTap: _safePop,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, color: Colors.white, size: 20),
+                  ),
                 ),
               ),
-            )
-          : const Center(child: CircularProgressIndicator(color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -352,6 +404,59 @@ class _InputTabState extends State<InputTab> {
         _videoBusy = false;
       });
     }
+  }
+
+  // 각 순의 5번째 칸: 관중/불발을 좌우로 나눠 바로 선택하게 하여
+  // (1~4번째가 이미 같은 결과일 때) 한 번의 터치로 원치 않는 영상이 뜨는 것을 예방
+  Widget _buildLastCell(int r) {
+    final v = _st[r][4];
+    final baseColor = r % 2 == 0 ? Colors.white : const Color(0xFFF7FDFB);
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              setState(() => _st[r][4] = v == 1 ? 0 : 1);
+              playArrowSound();
+              _checkRowCelebration(r);
+            },
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                color: v == 1 ? const Color(0xFFFCE4E0) : baseColor,
+                border: Border.all(color: const Color(0xFF999999), width: 0.5),
+              ),
+              child: Center(
+                child: v == 1
+                    ? CustomPaint(size: const Size(22,22), painter: HitPainter())
+                    : const Text('관중', style: TextStyle(fontSize: 10, color: Colors.grey)),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              setState(() => _st[r][4] = v == 2 ? 0 : 2);
+              playArrowSound();
+              _checkRowCelebration(r);
+            },
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                color: v == 2 ? const Color(0xFFE8E8E8) : baseColor,
+                border: Border.all(color: const Color(0xFF999999), width: 0.5),
+              ),
+              child: Center(
+                child: v == 2
+                    ? CustomPaint(size: const Size(22,22), painter: MissPainter())
+                    : const Text('불발', style: TextStyle(fontSize: 10, color: Colors.grey)),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildCell(int r, int c) {
@@ -456,7 +561,8 @@ class _InputTabState extends State<InputTab> {
                   for (int r = 0; r < 9; r++)
                     Row(children: [
                       _sunCell(sunNames[r]),
-                      for (int c = 0; c < 5; c++) Expanded(child: _buildCell(r, c)),
+                      for (int c = 0; c < 4; c++) Expanded(child: _buildCell(r, c)),
+                      Expanded(child: _buildLastCell(r)),
                       _scoreCell(_rowHasAny(r) ? '${_rowScore(r)}' : ''),
                       _totalCell(_rowHasAny(r) ? '${_cumTotal(r)}' : ''),
                     ]),
@@ -687,8 +793,24 @@ class _RecordsTabState extends State<RecordsTab> {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
-        title: Text('${rec.date}  제${rec.round}회',
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        title: Row(
+          children: [
+            Text(rec.isSeungdan ? rec.date : '${rec.date}  제${rec.round}회',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            if (rec.isSeungdan) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5C842),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text('승단',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF4A3800))),
+              ),
+            ],
+          ],
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -937,7 +1059,9 @@ class _StatsTabState extends State<StatsTab> {
 // 승단 심사 탭
 // ══════════════════════════════════════════
 class SeungdanTab extends StatefulWidget {
-  const SeungdanTab({super.key});
+  final Function(SijiRecord)? onSave;
+  final SijiRecord? loadRecord;
+  const SeungdanTab({super.key, this.onSave, this.loadRecord});
 
   @override
   State<SeungdanTab> createState() => _SeungdanTabState();
@@ -946,6 +1070,7 @@ class SeungdanTab extends StatefulWidget {
 class _SeungdanTabState extends State<SeungdanTab> {
   String _targetGrade = '초단';
   bool _isElderly = false;
+  DateTime _selectedDate = DateTime.now();
   List<List<int>> _st = List.generate(9, (_) => List.filled(5, 0));
 
   static const Map<String,int> _gradeTargets = {
@@ -956,7 +1081,18 @@ class _SeungdanTabState extends State<SeungdanTab> {
   static const List<String> _sunNames = ['一巡','二巡','三巡','四巡','五巡','六巡','七巡','八巡','九巡'];
 
   @override
-  void initState() { super.initState(); _loadSettings(); }
+  void initState() {
+    super.initState();
+    if (widget.loadRecord != null) {
+      final r = widget.loadRecord!;
+      _selectedDate = DateTime.tryParse(r.date) ?? DateTime.now();
+      _targetGrade = r.targetGrade ?? '초단';
+      _isElderly = r.isElderly ?? false;
+      _st = r.st.map((row) => List<int>.from(row)).toList();
+    } else {
+      _loadSettings();
+    }
+  }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -970,6 +1106,31 @@ class _SeungdanTabState extends State<SeungdanTab> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('seungdan_grade', _targetGrade);
     await prefs.setBool('seungdan_elderly', _isElderly);
+  }
+
+  String _formatDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
+
+  void _saveRecord() {
+    final dateStr = _formatDate(_selectedDate);
+    final key = 'seungdan_${dateStr}_${DateTime.now().millisecondsSinceEpoch}';
+    widget.onSave?.call(SijiRecord(
+      key: key,
+      date: dateStr,
+      round: '',
+      st: _st.map((row) => List<int>.from(row)).toList(),
+      diary: '',
+      total: _currentHits,
+      isSeungdan: true,
+      targetGrade: _targetGrade,
+      isElderly: _isElderly,
+      passed: _currentHits >= _targetHits,
+    ));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('승단 기록이 저장되었습니다'), backgroundColor: Color(0xFF1D9E75)),
+      );
+    }
   }
 
   int get _targetHits {
@@ -1033,6 +1194,31 @@ class _SeungdanTabState extends State<SeungdanTab> {
             color: const Color(0xFFF5C842), padding: const EdgeInsets.symmetric(vertical: 12),
             child: const Center(child: Text('승단 심사',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF4A3800)))),
+          ),
+          Container(
+            color: const Color(0xFFF5F5F5),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(context: context,
+                        initialDate: _selectedDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                    if (picked != null) setState(() => _selectedDate = picked);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(color: Colors.white,
+                        border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
+                    child: Row(children: [
+                      const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                      const SizedBox(width: 6),
+                      Text(_formatDate(_selectedDate), style: const TextStyle(fontSize: 14)),
+                    ]),
+                  ),
+                ),
+              ],
+            ),
           ),
           Container(
             color: const Color(0xFFF5F5F5),
@@ -1115,10 +1301,26 @@ class _SeungdanTabState extends State<SeungdanTab> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12,4,12,4),
-            child: OutlinedButton(
-              onPressed: _reset,
-              style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 36)),
-              child: const Text('초기화'),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _saveRecord,
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5DCAA5), foregroundColor: const Color(0xFF04342C),
+                        minimumSize: const Size(double.infinity, 36)),
+                    child: const Text('저장', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _reset,
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 36)),
+                    child: const Text('초기화'),
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(
