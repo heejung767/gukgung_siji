@@ -406,56 +406,105 @@ class _InputTabState extends State<InputTab> {
     }
   }
 
-  // 각 순의 5번째 칸: 관중/불발을 좌우로 나눠 바로 선택하게 하여
-  // (1~4번째가 이미 같은 결과일 때) 한 번의 터치로 원치 않는 영상이 뜨는 것을 예방
+  // 각 순의 5번째 칸: 평소엔 다른 칸과 똑같이 보이다가,
+  // 터치하면 관중/불발을 고르는 작은 팝업이 뜨고, 선택하면 팝업이 닫히며
+  // 그 결과가 칸에 표시된 다음 몰기/전불 이벤트가 실행됨
+  Future<void> _pickLastShot(int r) async {
+    final result = await showDialog<int>(
+      context: context,
+      barrierColor: Colors.black45,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 60),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('마지막 발 결과 선택',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx, 1),
+                    child: Container(
+                      width: 74, height: 74,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFCE4E0),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CustomPaint(size: const Size(26,26), painter: HitPainter()),
+                          const SizedBox(height: 4),
+                          const Text('관중', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx, 2),
+                    child: Container(
+                      width: 74, height: 74,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8E8E8),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CustomPaint(size: const Size(26,26), painter: MissPainter()),
+                          const SizedBox(height: 4),
+                          const Text('불발', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_st[r][4] != 0) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 0),
+                  child: const Text('선택 취소(초기화)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+    if (result != null) {
+      setState(() => _st[r][4] = result);
+      playArrowSound();
+      _checkRowCelebration(r);
+    }
+  }
+
   Widget _buildLastCell(int r) {
     final v = _st[r][4];
-    final baseColor = r % 2 == 0 ? Colors.white : const Color(0xFFF7FDFB);
-    return Row(
-      children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              setState(() => _st[r][4] = v == 1 ? 0 : 1);
-              playArrowSound();
-              _checkRowCelebration(r);
-            },
-            child: Container(
-              height: 48,
-              decoration: BoxDecoration(
-                color: v == 1 ? const Color(0xFFFCE4E0) : baseColor,
-                border: Border.all(color: const Color(0xFF999999), width: 0.5),
-              ),
-              child: Center(
-                child: v == 1
-                    ? CustomPaint(size: const Size(22,22), painter: HitPainter())
-                    : const Text('관중', style: TextStyle(fontSize: 10, color: Colors.grey)),
-              ),
-            ),
-          ),
+    return GestureDetector(
+      onTap: () => _pickLastShot(r),
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: r % 2 == 0 ? Colors.white : const Color(0xFFF7FDFB),
+          border: Border.all(color: const Color(0xFF999999), width: 0.5),
         ),
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              setState(() => _st[r][4] = v == 2 ? 0 : 2);
-              playArrowSound();
-              _checkRowCelebration(r);
-            },
-            child: Container(
-              height: 48,
-              decoration: BoxDecoration(
-                color: v == 2 ? const Color(0xFFE8E8E8) : baseColor,
-                border: Border.all(color: const Color(0xFF999999), width: 0.5),
-              ),
-              child: Center(
-                child: v == 2
-                    ? CustomPaint(size: const Size(22,22), painter: MissPainter())
-                    : const Text('불발', style: TextStyle(fontSize: 10, color: Colors.grey)),
-              ),
-            ),
-          ),
+        child: Center(
+          child: v == 1 ? CustomPaint(size: const Size(28,28), painter: HitPainter())
+               : v == 2 ? CustomPaint(size: const Size(28,28), painter: MissPainter())
+               : const SizedBox(),
         ),
-      ],
+      ),
     );
   }
 
@@ -478,6 +527,7 @@ class _InputTabState extends State<InputTab> {
                : v == 2 ? CustomPaint(size: const Size(28,28), painter: MissPainter())
                : const SizedBox(),
         ),
+
       ),
     );
   }
@@ -795,8 +845,14 @@ class _RecordsTabState extends State<RecordsTab> {
       child: ExpansionTile(
         title: Row(
           children: [
-            Text(rec.isSeungdan ? rec.date : '${rec.date}  제${rec.round}회',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            Flexible(
+              child: Text(
+                rec.isSeungdan ? rec.date : '${rec.date}  제${rec.round}회',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
             if (rec.isSeungdan) ...[
               const SizedBox(width: 6),
               Container(
