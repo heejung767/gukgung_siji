@@ -535,146 +535,140 @@ class _InputTabState extends State<InputTab> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Column(
-        children: [
-          Container(
-            color: const Color(0xFFF5C842),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: const Center(child: Text('국궁 시지',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF4A3800)))),
-          ),
-          Container(
-            color: const Color(0xFFF5F5F5),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(              children: [
-                Expanded(
-                  flex: 2,
-                  child: GestureDetector(
-                    onTap: () async {
-                      final picked = await showDatePicker(context: context,
-                          initialDate: _selectedDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
-                      if (picked != null) setState(() => _selectedDate = picked);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(color: Colors.white,
-                          border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
-                      child: Row(children: [
-                        const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
-                        const SizedBox(width: 6),
-                        Text(_formatDate(_selectedDate), style: const TextStyle(fontSize: 14)),
-                      ]),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    initialValue: _round,
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      filled: true, fillColor: Colors.white,
-                    ),
-                    items: List.generate(10, (i) => DropdownMenuItem(value: i+1, child: Text('제 ${i+1}회'))),
-                    onChanged: (v) => setState(() => _round = v!),
-                  ),
-                ),
-              ],
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            Container(
+              color: const Color(0xFFF5C842),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: const Center(child: Text('국궁 시지',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF4A3800)))),
             ),
-          ),
-          Container(
-            color: const Color(0xFFF5F5F5),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Row(
-              children: [
-                Expanded(child: ElevatedButton(
-                  onPressed: _saveRecord,
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5DCAA5), foregroundColor: const Color(0xFF04342C)),
-                  child: const Text('저장', style: TextStyle(fontWeight: FontWeight.w600)),
-                )),
-                const SizedBox(width: 8),
-                Expanded(child: OutlinedButton(onPressed: _resetInput, child: const Text('새 기록'))),
-              ],
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  Row(children: [
-                    _headerCell('순', width: 44), _headerCell('1시'), _headerCell('2시'),
-                    _headerCell('3시'), _headerCell('4시'), _headerCell('5시'),
-                    _headerCell('순시', width: 40), _headerCell('합시', width: 40),
-                  ]),
-                  for (int r = 0; r < 9; r++)
-                    Row(children: [
-                      _sunCell(sunNames[r]),
-                      for (int c = 0; c < 4; c++) Expanded(child: _buildCell(r, c)),
-                      Expanded(child: _buildLastCell(r)),
-                      _scoreCell(_rowHasAny(r) ? '${_rowScore(r)}' : ''),
-                      _totalCell(_rowHasAny(r) ? '${_cumTotal(r)}' : ''),
-                    ]),
-                  Container(
-                    color: const Color(0xFF5DCAA5),
-                    child: Row(children: [
-                      Expanded(child: Container(
-                        height: 38, alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 12),
-                        child: const Text('총 합계',
-                            style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF04342C))),
-                      )),
-                      SizedBox(width: 80, height: 38, child: Center(
-                        child: Text(_anyFilled() ? '${_grandTotal()}시' : '',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF04342C))),
-                      )),
-                    ]),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('습사일기', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _diaryController, maxLines: 4,
-                          textInputAction: TextInputAction.done,
-                          onEditingComplete: () => FocusScope.of(context).unfocus(),
-                          decoration: InputDecoration(
-                            hintText: '오늘의 습사 기록을 자유롭게 남겨보세요...',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            filled: true, fillColor: const Color(0xFFF9F9F9),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: ElevatedButton.icon(
-                            onPressed: () => FocusScope.of(context).unfocus(),
-                            icon: const Icon(Icons.check, size: 18),
-                            label: const Text('완료'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF5DCAA5),
-                              foregroundColor: const Color(0xFF04342C),
-                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                            ),
-                          ),
-                        ),
-                      ],
+            Container(
+              color: const Color(0xFFF5F5F5),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(              children: [
+                  Expanded(
+                    flex: 2,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(context: context,
+                            initialDate: _selectedDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                        if (picked != null) setState(() => _selectedDate = picked);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: Colors.white,
+                            border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
+                        child: Row(children: [
+                          const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                          const SizedBox(width: 6),
+                          Text(_formatDate(_selectedDate), style: const TextStyle(fontSize: 14)),
+                        ]),
+                      ),
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Text('셀 클릭: 첫 클릭 관중, 두 번째 불발, 세 번째 초기화',
-                        style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      initialValue: _round,
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        filled: true, fillColor: Colors.white,
+                      ),
+                      items: List.generate(10, (i) => DropdownMenuItem(value: i+1, child: Text('제 ${i+1}회'))),
+                      onChanged: (v) => setState(() => _round = v!),
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+            Container(
+              color: const Color(0xFFF5F5F5),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Row(
+                children: [
+                  Expanded(child: ElevatedButton(
+                    onPressed: _saveRecord,
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5DCAA5), foregroundColor: const Color(0xFF04342C)),
+                    child: const Text('저장', style: TextStyle(fontWeight: FontWeight.w600)),
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: OutlinedButton(onPressed: _resetInput, child: const Text('새 기록'))),
+                ],
+              ),
+            ),
+            Row(children: [
+              _headerCell('순', width: 44), _headerCell('1시'), _headerCell('2시'),
+              _headerCell('3시'), _headerCell('4시'), _headerCell('5시'),
+              _headerCell('순시', width: 40), _headerCell('합시', width: 40),
+            ]),
+            for (int r = 0; r < 9; r++)
+              Row(children: [
+                _sunCell(sunNames[r]),
+                for (int c = 0; c < 4; c++) Expanded(child: _buildCell(r, c)),
+                Expanded(child: _buildLastCell(r)),
+                _scoreCell(_rowHasAny(r) ? '${_rowScore(r)}' : ''),
+                _totalCell(_rowHasAny(r) ? '${_cumTotal(r)}' : ''),
+              ]),
+            Container(
+              color: const Color(0xFF5DCAA5),
+              child: Row(children: [
+                Expanded(child: Container(
+                  height: 38, alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 12),
+                  child: const Text('총 합계',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF04342C))),
+                )),
+                SizedBox(width: 80, height: 38, child: Center(
+                  child: Text(_anyFilled() ? '${_grandTotal()}시' : '',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF04342C))),
+                )),
+              ]),
+            ),
+            Container(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('습사일기', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _diaryController, maxLines: 4,
+                    textInputAction: TextInputAction.done,
+                    onEditingComplete: () => FocusScope.of(context).unfocus(),
+                    decoration: InputDecoration(
+                      hintText: '오늘의 습사 기록을 자유롭게 남겨보세요...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      filled: true, fillColor: const Color(0xFFF9F9F9),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      onPressed: () => FocusScope.of(context).unfocus(),
+                      icon: const Icon(Icons.check, size: 18),
+                      label: const Text('완료'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5DCAA5),
+                        foregroundColor: const Color(0xFF04342C),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text('셀 클릭: 첫 클릭 관중, 두 번째 불발, 세 번째 초기화',
+                  style: TextStyle(fontSize: 11, color: Colors.grey)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -846,11 +840,14 @@ class _RecordsTabState extends State<RecordsTab> {
         title: Row(
           children: [
             Flexible(
-              child: Text(
-                rec.isSeungdan ? rec.date : '${rec.date}  제${rec.round}회',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  rec.isSeungdan ? rec.date : '${rec.date}  제${rec.round}회',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  maxLines: 1,
+                ),
               ),
             ),
             if (rec.isSeungdan) ...[
@@ -871,11 +868,17 @@ class _RecordsTabState extends State<RecordsTab> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('${rec.total}시', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Color(0xFF0F6E56))),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
             TextButton(onPressed: () { widget.onLoad(rec); },
                 child: const Text('불러오기', style: TextStyle(color: Color(0xFF0F6E56), fontSize: 12))),
-            TextButton(onPressed: () => setState(() => _deleteKey = rec.key),
-                child: const Text('삭제', style: TextStyle(color: Color(0xFFE24B4A), fontSize: 12))),
+            IconButton(
+              onPressed: () => setState(() => _deleteKey = rec.key),
+              icon: const Icon(Icons.delete_outline, size: 20, color: Color(0xFFE24B4A)),
+              tooltip: '삭제',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              visualDensity: VisualDensity.compact,
+            ),
           ],
         ),
         children: [
@@ -1244,174 +1247,168 @@ class _SeungdanTabState extends State<SeungdanTab> {
     final isPassing = _currentHits >= _targetHits;
 
     return SafeArea(
-      child: Column(
-        children: [
-          Container(
-            color: const Color(0xFFF5C842), padding: const EdgeInsets.symmetric(vertical: 12),
-            child: const Center(child: Text('승단 심사',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF4A3800)))),
-          ),
-          Container(
-            color: const Color(0xFFF5F5F5),
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () async {
-                    final picked = await showDatePicker(context: context,
-                        initialDate: _selectedDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
-                    if (picked != null) setState(() => _selectedDate = picked);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.white,
-                        border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
-                    child: Row(children: [
-                      const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
-                      const SizedBox(width: 6),
-                      Text(_formatDate(_selectedDate), style: const TextStyle(fontSize: 14)),
-                    ]),
-                  ),
-                ),
-              ],
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            Container(
+              color: const Color(0xFFF5C842), padding: const EdgeInsets.symmetric(vertical: 12),
+              child: const Center(child: Text('승단 심사',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF4A3800)))),
             ),
-          ),
-          Container(
-            color: const Color(0xFFF5F5F5),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                const Text('목표: ', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                DropdownButton<String>(
-                  value: _targetGrade, underline: const SizedBox(), isDense: true,
-                  items: _gradeList.map((g) => DropdownMenuItem(value: g,
-                      child: Text(g, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)))).toList(),
-                  onChanged: (v) { setState(() => _targetGrade = v!); _saveSettings(); },
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: const Color(0xFF1D9E75), borderRadius: BorderRadius.circular(10)),
-                  child: Text('${_targetHits}중 필요',
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-                ),
-                const Spacer(),
-                const Text('70세 이상', style: TextStyle(fontSize: 12)),
-                Transform.scale(
-                  scale: 0.85,
-                  child: Checkbox(
-                    value: _isElderly,
-                    onChanged: (v) { setState(() => _isElderly = v!); _saveSettings(); },
-                    activeColor: const Color(0xFF1D9E75),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.fromLTRB(12,8,12,4),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white, borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isFailing ? Colors.red.shade300 : isPassing ? const Color(0xFF1D9E75) : Colors.grey.shade300,
-                width: isFailing || isPassing ? 2 : 1,
-              ),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _statusItem('${_currentHits}중', '현재 중수', const Color(0xFF0F6E56)),
-                    Container(width: 1, height: 32, color: Colors.grey.shade300),
-                    _statusItem('${_remainingArrows}발', '남은 발수', Colors.grey.shade700),
-                    Container(width: 1, height: 32, color: Colors.grey.shade300),
-                    _statusItem(
-                      isFailing ? '0발' : '${_allowedMisses}발',
-                      '허용 불발',
-                      isFailing
-                          ? Colors.red
-                          : _allowedMisses <= 2
-                              ? Colors.red.shade400
-                              : _allowedMisses <= 5
-                                  ? Colors.orange.shade700
-                                  : Colors.grey.shade700,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Container(height: 1, color: Colors.grey.shade200),
-                const SizedBox(height: 8),
-                Text(
-                  isFailing ? '탈락 확정' : _neededMore <= 0 ? '목표 달성!' : '${_neededMore}중 더 필요',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: isFailing ? Colors.red : _neededMore <= 0 ? const Color(0xFF1D9E75) : Colors.orange.shade700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12,4,12,4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _saveRecord,
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF5DCAA5), foregroundColor: const Color(0xFF04342C),
-                        minimumSize: const Size(double.infinity, 36)),
-                    child: const Text('저장', style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _reset,
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 36)),
-                    child: const Text('초기화'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
+            Container(
+              color: const Color(0xFFF5F5F5),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Row(
                 children: [
-                  Row(children: [
-                    _headerCell('순', width: 44), _headerCell('1시'), _headerCell('2시'),
-                    _headerCell('3시'), _headerCell('4시'), _headerCell('5시'),
-                    _headerCell('순시', width: 40), _headerCell('합시', width: 40),
-                  ]),
-                  for (int r = 0; r < 9; r++)
-                    Row(children: [
-                      _sunCell(_sunNames[r]),
-                      for (int c = 0; c < 5; c++) Expanded(child: _buildCell(r, c)),
-                      _scoreCell(_rowHasAny(r) ? '${_rowScore(r)}' : ''),
-                      _totalCell(_rowHasAny(r) ? '${_cumTotal(r)}' : ''),
-                    ]),
-                  Container(
-                    color: const Color(0xFF5DCAA5),
-                    child: Row(children: [
-                      Expanded(child: Container(
-                        height: 38, alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 12),
-                        child: Text('목표: ${_targetHits}중  /  현재: ${_currentHits}중',
-                            style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF04342C), fontSize: 13)),
-                      )),
-                    ]),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(context: context,
+                          initialDate: _selectedDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                      if (picked != null) setState(() => _selectedDate = picked);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(color: Colors.white,
+                          border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
+                      child: Row(children: [
+                        const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                        const SizedBox(width: 6),
+                        Text(_formatDate(_selectedDate), style: const TextStyle(fontSize: 14)),
+                      ]),
+                    ),
                   ),
-                  const SizedBox(height: 20),
                 ],
               ),
             ),
-          ),
-        ],
+            Container(
+              color: const Color(0xFFF5F5F5),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  const Text('목표: ', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  DropdownButton<String>(
+                    value: _targetGrade, underline: const SizedBox(), isDense: true,
+                    items: _gradeList.map((g) => DropdownMenuItem(value: g,
+                        child: Text(g, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)))).toList(),
+                    onChanged: (v) { setState(() => _targetGrade = v!); _saveSettings(); },
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: const Color(0xFF1D9E75), borderRadius: BorderRadius.circular(10)),
+                    child: Text('${_targetHits}중 필요',
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                  ),
+                  const Spacer(),
+                  const Text('70세 이상', style: TextStyle(fontSize: 12)),
+                  Transform.scale(
+                    scale: 0.85,
+                    child: Checkbox(
+                      value: _isElderly,
+                      onChanged: (v) { setState(() => _isElderly = v!); _saveSettings(); },
+                      activeColor: const Color(0xFF1D9E75),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              margin: const EdgeInsets.fromLTRB(12,8,12,4),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isFailing ? Colors.red.shade300 : isPassing ? const Color(0xFF1D9E75) : Colors.grey.shade300,
+                  width: isFailing || isPassing ? 2 : 1,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _statusItem('${_currentHits}중', '현재 중수', const Color(0xFF0F6E56)),
+                      Container(width: 1, height: 32, color: Colors.grey.shade300),
+                      _statusItem('${_remainingArrows}발', '남은 발수', Colors.grey.shade700),
+                      Container(width: 1, height: 32, color: Colors.grey.shade300),
+                      _statusItem(
+                        isFailing ? '0발' : '${_allowedMisses}발',
+                        '허용 불발',
+                        isFailing
+                            ? Colors.red
+                            : _allowedMisses <= 2
+                                ? Colors.red.shade400
+                                : _allowedMisses <= 5
+                                    ? Colors.orange.shade700
+                                    : Colors.grey.shade700,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Container(height: 1, color: Colors.grey.shade200),
+                  const SizedBox(height: 8),
+                  Text(
+                    isFailing ? '탈락 확정' : _neededMore <= 0 ? '목표 달성!' : '${_neededMore}중 더 필요',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: isFailing ? Colors.red : _neededMore <= 0 ? const Color(0xFF1D9E75) : Colors.orange.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12,4,12,4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _saveRecord,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF5DCAA5), foregroundColor: const Color(0xFF04342C),
+                          minimumSize: const Size(double.infinity, 36)),
+                      child: const Text('저장', style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _reset,
+                      style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 36)),
+                      child: const Text('초기화'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Row(children: [
+              _headerCell('순', width: 44), _headerCell('1시'), _headerCell('2시'),
+              _headerCell('3시'), _headerCell('4시'), _headerCell('5시'),
+              _headerCell('순시', width: 40), _headerCell('합시', width: 40),
+            ]),
+            for (int r = 0; r < 9; r++)
+              Row(children: [
+                _sunCell(_sunNames[r]),
+                for (int c = 0; c < 5; c++) Expanded(child: _buildCell(r, c)),
+                _scoreCell(_rowHasAny(r) ? '${_rowScore(r)}' : ''),
+                _totalCell(_rowHasAny(r) ? '${_cumTotal(r)}' : ''),
+              ]),
+            Container(
+              color: const Color(0xFF5DCAA5),
+              child: Row(children: [
+                Expanded(child: Container(
+                  height: 38, alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Text('목표: ${_targetHits}중  /  현재: ${_currentHits}중',
+                      style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF04342C), fontSize: 13)),
+                )),
+              ]),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }
