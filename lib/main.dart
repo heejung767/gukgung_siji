@@ -975,6 +975,13 @@ class _RecordsTabState extends State<RecordsTab> {
 // ══════════════════════════════════════════
 // 통계 탭
 // ══════════════════════════════════════════
+// 통계 차트용 단순 데이터 구조 (Map 키 충돌로 인한 데이터 유실 방지)
+class _ChartBar {
+  final String label;
+  final double value;
+  _ChartBar({required this.label, required this.value});
+}
+
 class StatsTab extends StatefulWidget {
   final List<SijiRecord> records;
   const StatsTab({super.key, required this.records});
@@ -985,10 +992,30 @@ class StatsTab extends StatefulWidget {
 
 class _StatsTabState extends State<StatsTab> {
   int _year = DateTime.now().year;
-  String _type = 'monthly';
+  int _month = DateTime.now().month;
+  // 'avg' = 월별 평균, 'daily_avg' = 일별 평균, 'daily' = 일별 합시(선택한 하루)
+  String _type = 'avg';
+  DateTime _selectedDailyDate = DateTime.now();
 
   List<SijiRecord> get _filtered =>
       widget.records.where((r) => int.parse(r.date.split('-')[0]) == _year).toList();
+
+  String _fmtDailyDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
+
+  // 한 순(5시)당 평균 적중 수 = 해당 기간 총 시수 합 ÷ (9 × 기록 건수)
+  // 기록 하나는 항상 9순 기준판이므로, 이렇게 계산하면 "평소 한 순에 몇 중 하는지"가 바로 나옴
+  double _avgPerSun(List<SijiRecord> recs) {
+    if (recs.isEmpty) return 0.0;
+    final sum = recs.fold(0, (s, r) => s + r.total);
+    return sum / (9 * recs.length);
+  }
+
+  String _fmtAvg(double v) {
+    final rounded = (v * 10).round() / 10;
+    final isWhole = rounded == rounded.roundToDouble();
+    return '평${isWhole ? rounded.toInt() : rounded.toStringAsFixed(1)}중';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1003,29 +1030,64 @@ class _StatsTabState extends State<StatsTab> {
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF4A3800)))),
             ),
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(12,12,12,0),
               child: Row(
                 children: [
-                  DropdownButton<int>(
-                    value: _year,
-                    items: List.generate(6, (i) => DateTime.now().year - i)
-                        .map((y) => DropdownMenuItem(value: y, child: Text('${y}년'))).toList(),
-                    onChanged: (v) => setState(() => _year = v!),
-                  ),
-                  const SizedBox(width: 12),
+                  if (_type != 'daily')
+                    DropdownButton<int>(
+                      value: _year,
+                      items: List.generate(6, (i) => DateTime.now().year - i)
+                          .map((y) => DropdownMenuItem(value: y, child: Text('${y}년'))).toList(),
+                      onChanged: (v) => setState(() => _year = v!),
+                    ),
+                  if (_type != 'daily') const SizedBox(width: 12),
                   DropdownButton<String>(
                     value: _type,
                     items: const [
-                      DropdownMenuItem(value: 'monthly', child: Text('월별 합시')),
                       DropdownMenuItem(value: 'avg', child: Text('월별 평균')),
+                      DropdownMenuItem(value: 'daily_avg', child: Text('일별 평균')),
                       DropdownMenuItem(value: 'daily', child: Text('일별 합시')),
                     ],
                     onChanged: (v) => setState(() => _type = v!),
                   ),
+                  if (_type == 'daily_avg') ...[
+                    const SizedBox(width: 12),
+                    DropdownButton<int>(
+                      value: _month,
+                      items: List.generate(12, (i) => i + 1)
+                          .map((m) => DropdownMenuItem(value: m, child: Text('${m}월'))).toList(),
+                      onChanged: (v) => setState(() => _month = v!),
+                    ),
+                  ],
+                  if (_type == 'daily') ...[
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(context: context,
+                            initialDate: _selectedDailyDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                        if (picked != null) setState(() => _selectedDailyDate = picked);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(color: Colors.white,
+                            border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
+                        child: Row(children: [
+                          const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                          const SizedBox(width: 6),
+                          Text(_fmtDailyDate(_selectedDailyDate), style: const TextStyle(fontSize: 14)),
+                        ]),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-            if (filtered.isEmpty)
+            if (_type == 'daily')
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: _buildDailySingleDayView(),
+              )
+            else if (filtered.isEmpty)
               const Padding(padding: EdgeInsets.all(40),
                   child: Text('저장된 기록이 없습니다\n먼저 시지를 입력하고 저장해보세요!',
                       textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)))
@@ -1040,7 +1102,10 @@ class _StatsTabState extends State<StatsTab> {
                 ]),
               ),
               const SizedBox(height: 16),
-              Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: _buildBarChart(filtered)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: _type == 'avg' ? _buildMonthlyAvgChart(filtered) : _buildDailyAvgChart(filtered),
+              ),
               const SizedBox(height: 20),
             ],
           ],
@@ -1061,52 +1126,145 @@ class _StatsTabState extends State<StatsTab> {
         ),
       );
 
-  Widget _buildBarChart(List<SijiRecord> filtered) {
-    Map<String,List<int>> data = {};
-    if (_type == 'monthly' || _type == 'avg') {
-      for (int m=1; m<=12; m++) {
-        data['${m}월'] = filtered.where((r)=>int.parse(r.date.split('-')[1])==m).map((r)=>r.total).toList();
-      }
-    } else {
-      final sorted = filtered.toList()..sort((a,b)=>a.date.compareTo(b.date));
-      for (final r in sorted) { data['${r.date.substring(5)} ${r.round}회'] = [r.total]; }
+  // 월별 평균 (12개월, 스크롤 없이 화면 폭에 맞춰 표시)
+  Widget _buildMonthlyAvgChart(List<SijiRecord> filtered) {
+    final bars = List.generate(12, (i) {
+      final m = i + 1;
+      final recs = filtered.where((r) => int.parse(r.date.split('-')[1]) == m).toList();
+      return _ChartBar(label: '${m}월', value: _avgPerSun(recs));
+    });
+    return _avgBarChart('${_year}년 월별 평균 (한 순당 평균 적중)', bars, scrollable: false);
+  }
+
+  // 일별 평균 (선택한 월의 날짜 전체, 가로 스크롤)
+  Widget _buildDailyAvgChart(List<SijiRecord> filtered) {
+    final monthRecs = filtered.where((r) => int.parse(r.date.split('-')[1]) == _month).toList();
+    final daysInMonth = DateTime(_year, _month + 1, 0).day;
+    final bars = List.generate(daysInMonth, (i) {
+      final d = i + 1;
+      final recs = monthRecs.where((r) => int.parse(r.date.split('-')[2]) == d).toList();
+      return _ChartBar(label: '${d}일', value: _avgPerSun(recs));
+    });
+    return _avgBarChart('${_year}년 ${_month}월 일별 평균 (한 순당 평균 적중)', bars, scrollable: true);
+  }
+
+  // 평균(순당 적중) 계열 공통 차트 위젯 - 값 범위 0~5중 기준
+  Widget _avgBarChart(String title, List<_ChartBar> entries, {required bool scrollable}) {
+    Widget bar(_ChartBar e) {
+      final height = e.value <= 0 ? 0.0 : (e.value / 5.0).clamp(0.0, 1.0) * 155;
+      final content = Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          SizedBox(
+            height: 14,
+            child: e.value > 0
+                ? FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(_fmtAvg(e.value),
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0F6E56))),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 2),
+          Container(
+            height: height, margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFF5DCAA5).withValues(alpha: 0.8),
+              borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(3), topRight: Radius.circular(3)),
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(e.label, style: const TextStyle(fontSize: 10), textAlign: TextAlign.center),
+          ),
+        ],
+      );
+      return scrollable ? SizedBox(width: 46, child: content) : Expanded(child: content);
     }
-    final entries = data.entries.toList();
+
+    final row = Row(crossAxisAlignment: CrossAxisAlignment.end, children: entries.map(bar).toList());
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_type=='monthly'?'${_year}년 월별 합시':_type=='avg'?'${_year}년 월별 평균':'${_year}년 일별 합시',
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
         const SizedBox(height: 12),
         SizedBox(
           height: 200,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: entries.map((e) {
-              final vals = e.value;
-              final val = vals.isEmpty ? 0.0
-                  : _type=='avg' ? vals.fold(0,(s,v)=>s+v)/vals.length
-                  : vals.fold(0,(s,v)=>s+v).toDouble();
-              final height = val==0 ? 0.0 : (val/45.0)*160;
-              return Expanded(child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
+          child: scrollable ? SingleChildScrollView(scrollDirection: Axis.horizontal, child: row) : row,
+        ),
+      ],
+    );
+  }
+
+  // 일별 합시: 선택한 하루(기본값 오늘)의 기록만 보여줌.
+  // 그날 기록이 여러 건(일반+승단 등)이면 전부 합산.
+  // "총 소진"은 맞은 것/빗나간 것 다 포함한 화살 수(발수) 기준이며, 5발 단위(한 순)로 묶어서
+  // "N순 M발" 형태로 표시함 — 예: 53발이면 10순 3발.
+  Widget _buildDailySingleDayView() {
+    final dateStr = _fmtDailyDate(_selectedDailyDate);
+    final dayRecords = widget.records.where((r) => r.date == dateStr).toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    if (dayRecords.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 30),
+        child: Center(child: Text('이 날짜엔 저장된 기록이 없습니다',
+            style: TextStyle(color: Colors.grey))),
+      );
+    }
+
+    int totalShots = 0;
+    int totalHits = 0;
+    for (final r in dayRecords) {
+      totalShots += r.st.expand((row) => row).where((v) => v != 0).length;
+      totalHits += r.total;
+    }
+    final fullSuns = totalShots ~/ 5;
+    final remainder = totalShots % 5;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final r in dayRecords)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF8),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  if (val>0) Text(val.toStringAsFixed(val==val.roundToDouble()?0:1),
-                      style: const TextStyle(fontSize: 8, color: Color(0xFF0F6E56))),
-                  const SizedBox(height: 2),
-                  Container(
-                    height: height, margin: const EdgeInsets.symmetric(horizontal: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF5DCAA5).withValues(alpha: 0.8),
-                      borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(3), topRight: Radius.circular(3)),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(e.key, style: const TextStyle(fontSize: 8), textAlign: TextAlign.center),
+                  Text(r.isSeungdan ? '승단 기록' : '제${r.round}회',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  Text('${r.total}시',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF0F6E56))),
                 ],
-              ));
-            }).toList(),
+              ),
+            ),
+          ),
+        const SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF5DCAA5),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('총 소진 $totalShots발  ·  적중 $totalHits시',
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF04342C), fontSize: 12)),
+              const SizedBox(height: 3),
+              Text('총 $fullSuns순 $remainder발',
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF04342C), fontSize: 16)),
+            ],
           ),
         ),
       ],
@@ -1233,10 +1391,10 @@ class _SeungdanTabState extends State<SeungdanTab> {
           assetPath: passed ? 'assets/videos/congrats.mp4' : 'assets/videos/sugo.mp4',
         ),
       ),
-    ).then((_) {
-      // 영상 재생이 끝나고 자동으로 돌아오면 시지판 초기화
-      if (mounted) setState(() => _st = List.generate(9, (_) => List.filled(5, 0)));
-    });
+    );
+    // 영상이 끝나고 돌아와도 시수판은 그대로 유지됩니다.
+    // (이전엔 자동 초기화되어 결과를 저장할 수 없었음 - 이제 '저장' 버튼으로 직접 저장하거나
+    //  '초기화' 버튼을 눌러야만 지워집니다.)
   }
 
   void _reset() => setState(() => _st = List.generate(9, (_) => List.filled(5, 0)));
