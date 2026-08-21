@@ -336,6 +336,8 @@ class InputTab extends StatefulWidget {
 }
 
 class _InputTabState extends State<InputTab> {
+  static const String _tempDraftKey = 'input_temp_draft';
+
   DateTime _selectedDate = DateTime.now();
   int _round = 1;
   List<List<int>> _st = List.generate(9, (_) => List.filled(5, 0));
@@ -353,6 +355,73 @@ class _InputTabState extends State<InputTab> {
       _round = int.tryParse(r.round) ?? 1;
       _st = r.st.map((row) => List<int>.from(row)).toList();
       _diaryController.text = r.diary;
+    } else {
+      // 저장기록에서 불러온 게 아닐 때만 임시 보관분을 확인함
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkTempDraft());
+    }
+  }
+
+  // ──────────────────────────────
+  // 임시 보관 (자동 저장 아님 — shared_preferences의 별도 키 사용,
+  // 정식 기록('records')과 완전히 분리되어 있어 문제가 생겨도 기존 기록엔 영향 없음)
+  // ──────────────────────────────
+  Future<void> _saveTempDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final draft = {
+      'date': _formatDate(_selectedDate),
+      'round': _round,
+      'st': _st,
+      'diary': _diaryController.text,
+    };
+    await prefs.setString(_tempDraftKey, jsonEncode(draft));
+  }
+
+  Future<void> _clearTempDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tempDraftKey);
+  }
+
+  Future<void> _checkTempDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString(_tempDraftKey);
+    if (data == null || !mounted) return;
+
+    final restore = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('작성 중이던 기록이 있습니다'),
+        content: const Text('이어서 작성하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('아니오'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('예'),
+          ),
+        ],
+      ),
+    );
+
+    if (restore == true) {
+      try {
+        final draft = jsonDecode(data) as Map<String, dynamic>;
+        setState(() {
+          _selectedDate = DateTime.tryParse(draft['date'] ?? '') ?? DateTime.now();
+          _round = draft['round'] ?? 1;
+          _st = (draft['st'] as List)
+              .map((row) => (row as List).map((v) => v as int).toList())
+              .toList();
+          _diaryController.text = draft['diary'] ?? '';
+        });
+      } catch (_) {
+        // 임시 보관분이 손상되어 있으면 조용히 무시하고 삭제
+        await _clearTempDraft();
+      }
+    } else {
+      await _clearTempDraft();
     }
   }
 
@@ -370,6 +439,7 @@ class _InputTabState extends State<InputTab> {
       _st = List.generate(9, (_) => List.filled(5, 0));
       _diaryController.clear();
     });
+    _clearTempDraft();
   }
 
   void _saveRecord() {
@@ -380,6 +450,7 @@ class _InputTabState extends State<InputTab> {
       st: _st.map((row) => List<int>.from(row)).toList(),
       diary: _diaryController.text, total: _grandTotal(),
     ));
+    _clearTempDraft();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('저장되었습니다'), backgroundColor: Color(0xFF1D9E75)),
     );
@@ -485,6 +556,7 @@ class _InputTabState extends State<InputTab> {
     if (result != null) {
       setState(() => _st[r][4] = result);
       playArrowSound();
+      _saveTempDraft();
       _checkRowCelebration(r);
     }
   }
@@ -514,6 +586,7 @@ class _InputTabState extends State<InputTab> {
       onTap: () {
         setState(() => _st[r][c] = (_st[r][c] + 1) % 3);
         playArrowSound();
+        _saveTempDraft();
         _checkRowCelebration(r);
       },
       child: Container(
@@ -1285,6 +1358,8 @@ class SeungdanTab extends StatefulWidget {
 }
 
 class _SeungdanTabState extends State<SeungdanTab> {
+  static const String _tempDraftKey = 'seungdan_temp_draft';
+
   String _targetGrade = '초단';
   bool _isElderly = false;
   DateTime _selectedDate = DateTime.now();
@@ -1308,6 +1383,71 @@ class _SeungdanTabState extends State<SeungdanTab> {
       _st = r.st.map((row) => List<int>.from(row)).toList();
     } else {
       _loadSettings();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkTempDraft());
+    }
+  }
+
+  // ──────────────────────────────
+  // 임시 보관 (자동 저장 아님 — shared_preferences의 별도 키 사용,
+  // 정식 승단 기록('records')과 완전히 분리되어 있어 문제가 생겨도 기존 기록엔 영향 없음)
+  // ──────────────────────────────
+  Future<void> _saveTempDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final draft = {
+      'date': _formatDate(_selectedDate),
+      'targetGrade': _targetGrade,
+      'isElderly': _isElderly,
+      'st': _st,
+    };
+    await prefs.setString(_tempDraftKey, jsonEncode(draft));
+  }
+
+  Future<void> _clearTempDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tempDraftKey);
+  }
+
+  Future<void> _checkTempDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString(_tempDraftKey);
+    if (data == null || !mounted) return;
+
+    final restore = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('작성 중이던 승단 기록이 있습니다'),
+        content: const Text('이어서 작성하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('아니오'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('예'),
+          ),
+        ],
+      ),
+    );
+
+    if (restore == true) {
+      try {
+        final draft = jsonDecode(data) as Map<String, dynamic>;
+        setState(() {
+          _selectedDate = DateTime.tryParse(draft['date'] ?? '') ?? DateTime.now();
+          _targetGrade = draft['targetGrade'] ?? '초단';
+          _isElderly = draft['isElderly'] ?? false;
+          _st = (draft['st'] as List)
+              .map((row) => (row as List).map((v) => v as int).toList())
+              .toList();
+        });
+      } catch (_) {
+        // 임시 보관분이 손상되어 있으면 조용히 무시하고 삭제
+        await _clearTempDraft();
+      }
+    } else {
+      await _clearTempDraft();
     }
   }
 
@@ -1343,6 +1483,7 @@ class _SeungdanTabState extends State<SeungdanTab> {
       isElderly: _isElderly,
       passed: _currentHits >= _targetHits,
     ));
+    _clearTempDraft();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('승단 기록이 저장되었습니다'), backgroundColor: Color(0xFF1D9E75)),
@@ -1372,6 +1513,7 @@ class _SeungdanTabState extends State<SeungdanTab> {
   void _onCellTap(int r, int c) {
     setState(() => _st[r][c] = (_st[r][c]+1)%3);
     playArrowSound();
+    _saveTempDraft();
     final hits = _st.fold(0,(s,row)=>s+row.where((v)=>v==1).length);
     final inputted = _st.fold(0,(s,row)=>s+row.where((v)=>v!=0).length);
     final remaining = 45 - inputted;
@@ -1397,7 +1539,10 @@ class _SeungdanTabState extends State<SeungdanTab> {
     //  '초기화' 버튼을 눌러야만 지워집니다.)
   }
 
-  void _reset() => setState(() => _st = List.generate(9, (_) => List.filled(5, 0)));
+  void _reset() {
+    setState(() => _st = List.generate(9, (_) => List.filled(5, 0)));
+    _clearTempDraft();
+  }
 
   @override
   Widget build(BuildContext context) {
