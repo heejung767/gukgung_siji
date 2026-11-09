@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'dart:async';
 import 'dart:convert';
 
 void main() {
@@ -55,6 +56,8 @@ class SijiRecord {
   final String? targetGrade;
   final bool? isElderly;
   final bool? passed;
+  // 각 순의 5시를 입력한 시각(24시간 'HH:mm', 없으면 ''). 기존 기록과 호환됨
+  final List<String> times;
 
   SijiRecord({
     required this.key,
@@ -67,9 +70,11 @@ class SijiRecord {
     this.targetGrade,
     this.isElderly,
     this.passed,
-  });
+    List<String>? times,
+  }) : times = times ?? List.filled(9, '');
 
   Map<String, dynamic> toJson() => {
+        'times': times,
         'key': key, 'date': date, 'round': round,
         'st': st, 'diary': diary, 'total': total,
         'isSeungdan': isSeungdan,
@@ -89,6 +94,9 @@ class SijiRecord {
         targetGrade: json['targetGrade'],
         isElderly: json['isElderly'],
         passed: json['passed'],
+        times: json['times'] == null
+            ? null
+            : (json['times'] as List).map((v) => v.toString()).toList(),
       );
 }
 
@@ -341,19 +349,75 @@ class _InputTabState extends State<InputTab> {
   DateTime _selectedDate = DateTime.now();
   int _round = 1;
   List<List<int>> _st = List.generate(9, (_) => List.filled(5, 0));
+  List<String> _times = List.filled(9, ''); // 각 순 5시 입력 시각 (HH:mm)
   final _diaryController = TextEditingController();
   bool _videoBusy = false;
 
   static const sunNames = ['一巡','二巡','三巡','四巡','五巡','六巡','七巡','八巡','九巡'];
 
+  // 각 순에서 마지막으로 입력(수정)한 시각(epoch ms, 0=없음) — 시각 확정 전에만 사용
+  List<int> _lastMs = List.filled(9, 0);
+  Timer? _timeTimer;
+
+  String _fmtMs(int ms) {
+    final n = DateTime.fromMillisecondsSinceEpoch(ms);
+    return '${n.hour.toString().padLeft(2,'0')}:${n.minute.toString().padLeft(2,'0')}';
+  }
+
+  // 한 번 정해진 시각은 이후 수정/재입력해도 바뀌지 않음(처음 값 유지).
+  // - 5시를 입력하면 그 시각으로 확정
+  // - 이후 순에 입력이 생기면, 5시가 비어 있던 앞 순은 그 순의 마지막 입력 시각으로 확정
+  // - 마지막 입력 후 10분이 지나면(타이머) 그 순의 마지막 입력 시각으로 확정
+  void _touchRow(int r) {
+    if (!_rowHasAny(r)) {
+      _times[r] = '';
+      _lastMs[r] = 0;
+      return;
+    }
+    for (int q = 0; q < r; q++) {
+      if (_times[q].isEmpty && _lastMs[q] > 0 && _rowHasAny(q)) {
+        _times[q] = _fmtMs(_lastMs[q]);
+      }
+    }
+    if (_times[r].isEmpty) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      _lastMs[r] = now;
+      if (_st[r][4] != 0) _times[r] = _fmtMs(now);
+    }
+  }
+
+  void _checkTimeout() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    bool changed = false;
+    for (int r = 0; r < 9; r++) {
+      if (_times[r].isEmpty && _lastMs[r] > 0 && _rowHasAny(r) &&
+          now - _lastMs[r] >= 10 * 60 * 1000) {
+        _times[r] = _fmtMs(_lastMs[r]);
+        changed = true;
+      }
+    }
+    if (changed && mounted) {
+      setState(() {});
+      _saveTempDraft();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timeTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
+    _timeTimer = Timer.periodic(const Duration(seconds: 20), (_) => _checkTimeout());
     if (widget.loadRecord != null) {
       final r = widget.loadRecord!;
       _selectedDate = DateTime.tryParse(r.date) ?? DateTime.now();
       _round = int.tryParse(r.round) ?? 1;
       _st = r.st.map((row) => List<int>.from(row)).toList();
+      _times = List<String>.generate(9, (i) => i < r.times.length ? r.times[i] : '');
       _diaryController.text = r.diary;
     } else {
       // 저장기록에서 불러온 게 아닐 때만 임시 보관분을 확인함
@@ -371,6 +435,8 @@ class _InputTabState extends State<InputTab> {
       'date': _formatDate(_selectedDate),
       'round': _round,
       'st': _st,
+      'times': _times,
+      'lastMs': _lastMs,
       'diary': _diaryController.text,
     };
     await prefs.setString(_tempDraftKey, jsonEncode(draft));
@@ -414,6 +480,12 @@ class _InputTabState extends State<InputTab> {
           _st = (draft['st'] as List)
               .map((row) => (row as List).map((v) => v as int).toList())
               .toList();
+          final t = draft['times'];
+          _times = List<String>.generate(
+              9, (i) => (t is List && i < t.length) ? t[i].toString() : '');
+          final lm = draft['lastMs'];
+          _lastMs = List<int>.generate(
+              9, (i) => (lm is List && i < lm.length && lm[i] is int) ? lm[i] as int : 0);
           _diaryController.text = draft['diary'] ?? '';
         });
       } catch (_) {
@@ -427,7 +499,6 @@ class _InputTabState extends State<InputTab> {
 
   int _rowScore(int r) => _st[r].where((v) => v == 1).length;
   bool _rowHasAny(int r) => _st[r].any((v) => v != 0);
-  int _cumTotal(int r) { int t=0; for(int i=0;i<=r;i++) t+=_rowScore(i); return t; }
   int _grandTotal() { int t=0; for(int i=0;i<9;i++) t+=_rowScore(i); return t; }
   bool _anyFilled() => _st.any((row) => row.any((v) => v != 0));
   String _formatDate(DateTime d) =>
@@ -437,6 +508,8 @@ class _InputTabState extends State<InputTab> {
     setState(() {
       _selectedDate = DateTime.now(); _round = 1;
       _st = List.generate(9, (_) => List.filled(5, 0));
+      _times = List.filled(9, '');
+      _lastMs = List.filled(9, 0);
       _diaryController.clear();
     });
     _clearTempDraft();
@@ -449,6 +522,7 @@ class _InputTabState extends State<InputTab> {
       key: key, date: dateStr, round: _round.toString(),
       st: _st.map((row) => List<int>.from(row)).toList(),
       diary: _diaryController.text, total: _grandTotal(),
+      times: List<String>.from(_times),
     ));
     _clearTempDraft();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -554,7 +628,10 @@ class _InputTabState extends State<InputTab> {
       ),
     );
     if (result != null) {
-      setState(() => _st[r][4] = result);
+      setState(() {
+        _st[r][4] = result;
+        _touchRow(r);
+      });
       playArrowSound();
       _saveTempDraft();
       _checkRowCelebration(r);
@@ -584,7 +661,10 @@ class _InputTabState extends State<InputTab> {
     final v = _st[r][c];
     return GestureDetector(
       onTap: () {
-        setState(() => _st[r][c] = (_st[r][c] + 1) % 3);
+        setState(() {
+          _st[r][c] = (_st[r][c] + 1) % 3;
+          _touchRow(r);
+        });
         playArrowSound();
         _saveTempDraft();
         _checkRowCelebration(r);
@@ -676,7 +756,7 @@ class _InputTabState extends State<InputTab> {
             Row(children: [
               _headerCell('순', width: 44), _headerCell('1시'), _headerCell('2시'),
               _headerCell('3시'), _headerCell('4시'), _headerCell('5시'),
-              _headerCell('순시', width: 40), _headerCell('합시', width: 40),
+              _headerCell('순시', width: 40), _headerCell('시각', width: 52),
             ]),
             for (int r = 0; r < 9; r++)
               Row(children: [
@@ -684,7 +764,7 @@ class _InputTabState extends State<InputTab> {
                 for (int c = 0; c < 4; c++) Expanded(child: _buildCell(r, c)),
                 Expanded(child: _buildLastCell(r)),
                 _scoreCell(_rowHasAny(r) ? '${_rowScore(r)}' : ''),
-                _totalCell(_rowHasAny(r) ? '${_cumTotal(r)}' : ''),
+                _timeCell(_times[r]),
               ]),
             Container(
               color: const Color(0xFF5DCAA5),
@@ -764,12 +844,12 @@ class _InputTabState extends State<InputTab> {
             border: Border.all(color: const Color(0xFF999999), width: 0.5)),
         child: Center(child: Text(text,
             style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F6E56), fontSize: 14)))));
-  Widget _totalCell(String text) => SizedBox(width: 40, height: 48,
+  Widget _timeCell(String text) => SizedBox(width: 52, height: 48,
       child: Container(
         decoration: BoxDecoration(color: const Color(0xFFC8EDDE),
             border: Border.all(color: const Color(0xFF999999), width: 0.5)),
         child: Center(child: Text(text,
-            style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F6E56), fontSize: 14)))));
+            style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F6E56), fontSize: 12)))));
 }
 
 class HitPainter extends CustomPainter {
@@ -1076,12 +1156,22 @@ class _StatsTabState extends State<StatsTab> {
   String _fmtDailyDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
 
-  // 한 순(5시)당 평균 적중 수 = 해당 기간 총 시수 합 ÷ (9 × 기록 건수)
-  // 기록 하나는 항상 9순 기준판이므로, 이렇게 계산하면 "평소 한 순에 몇 중 하는지"가 바로 나옴
+  // 한 순(5시)당 평균 적중 수 = 총 적중 수 ÷ 실제 쏜 순 수
+  // 쏜 순 수 = 무언가 입력(관중/불발)된 마지막 순까지의 순 수 (중간에 빈 순은 포함, 뒤쪽 빈 순만 제외)
+  int _sunShot(SijiRecord r) {
+    int last = -1;
+    for (int i = 0; i < r.st.length; i++) {
+      if (r.st[i].any((v) => v != 0)) last = i;
+    }
+    return last + 1;
+  }
+
   double _avgPerSun(List<SijiRecord> recs) {
     if (recs.isEmpty) return 0.0;
     final sum = recs.fold(0, (s, r) => s + r.total);
-    return sum / (9 * recs.length);
+    final suns = recs.fold(0, (s, r) => s + _sunShot(r));
+    if (suns == 0) return 0.0;
+    return sum / suns;
   }
 
   String _fmtAvg(double v) {
