@@ -58,6 +58,8 @@ class SijiRecord {
   final bool? passed;
   // 각 순의 5시를 입력한 시각(24시간 'HH:mm', 없으면 ''). 기존 기록과 호환됨
   final List<String> times;
+  // 불발 방향(0=없음, 1~8=방향). st와 같은 9x5 크기, 기존 기록과 호환됨
+  final List<List<int>> dirs;
 
   SijiRecord({
     required this.key,
@@ -71,10 +73,13 @@ class SijiRecord {
     this.isElderly,
     this.passed,
     List<String>? times,
-  }) : times = times ?? List.filled(9, '');
+    List<List<int>>? dirs,
+  })  : times = times ?? List.filled(9, ''),
+        dirs = dirs ?? List.generate(9, (_) => List.filled(5, 0));
 
   Map<String, dynamic> toJson() => {
         'times': times,
+        'dirs': dirs,
         'key': key, 'date': date, 'round': round,
         'st': st, 'diary': diary, 'total': total,
         'isSeungdan': isSeungdan,
@@ -97,6 +102,7 @@ class SijiRecord {
         times: json['times'] == null
             ? null
             : (json['times'] as List).map((v) => v.toString()).toList(),
+        dirs: parseDirs(json['dirs']),
       );
 }
 
@@ -349,6 +355,7 @@ class _InputTabState extends State<InputTab> {
   DateTime _selectedDate = DateTime.now();
   int _round = 1;
   List<List<int>> _st = List.generate(9, (_) => List.filled(5, 0));
+  List<List<int>> _dirs = emptyDirs();
   List<String> _times = List.filled(9, ''); // 각 순 5시 입력 시각 (HH:mm)
   final _diaryController = TextEditingController();
   bool _videoBusy = false;
@@ -417,6 +424,7 @@ class _InputTabState extends State<InputTab> {
       _selectedDate = DateTime.tryParse(r.date) ?? DateTime.now();
       _round = int.tryParse(r.round) ?? 1;
       _st = r.st.map((row) => List<int>.from(row)).toList();
+      _dirs = r.dirs.map((row) => List<int>.from(row)).toList();
       _times = List<String>.generate(9, (i) => i < r.times.length ? r.times[i] : '');
       _diaryController.text = r.diary;
     } else {
@@ -435,6 +443,7 @@ class _InputTabState extends State<InputTab> {
       'date': _formatDate(_selectedDate),
       'round': _round,
       'st': _st,
+      'dirs': _dirs,
       'times': _times,
       'lastMs': _lastMs,
       'diary': _diaryController.text,
@@ -480,6 +489,7 @@ class _InputTabState extends State<InputTab> {
           _st = (draft['st'] as List)
               .map((row) => (row as List).map((v) => v as int).toList())
               .toList();
+          _dirs = parseDirs(draft['dirs']);
           final t = draft['times'];
           _times = List<String>.generate(
               9, (i) => (t is List && i < t.length) ? t[i].toString() : '');
@@ -508,6 +518,7 @@ class _InputTabState extends State<InputTab> {
     setState(() {
       _selectedDate = DateTime.now(); _round = 1;
       _st = List.generate(9, (_) => List.filled(5, 0));
+      _dirs = emptyDirs();
       _times = List.filled(9, '');
       _lastMs = List.filled(9, 0);
       _diaryController.clear();
@@ -523,6 +534,7 @@ class _InputTabState extends State<InputTab> {
       st: _st.map((row) => List<int>.from(row)).toList(),
       diary: _diaryController.text, total: _grandTotal(),
       times: List<String>.from(_times),
+      dirs: _dirs.map((row) => List<int>.from(row)).toList(),
     ));
     _clearTempDraft();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -551,136 +563,38 @@ class _InputTabState extends State<InputTab> {
     }
   }
 
-  // 각 순의 5번째 칸: 평소엔 다른 칸과 똑같이 보이다가,
-  // 터치하면 관중/불발을 고르는 작은 팝업이 뜨고, 선택하면 팝업이 닫히며
-  // 그 결과가 칸에 표시된 다음 몰기/전불 이벤트가 실행됨
-  Future<void> _pickLastShot(int r) async {
-    final result = await showDialog<int>(
-      context: context,
-      barrierColor: Colors.black45,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 60),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('마지막 발 결과 선택',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(ctx, 1),
-                    child: Container(
-                      width: 74, height: 74,
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFCE4E0),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CustomPaint(size: const Size(26,26), painter: HitPainter()),
-                          const SizedBox(height: 4),
-                          const Text('관중', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(ctx, 2),
-                    child: Container(
-                      width: 74, height: 74,
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8E8E8),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CustomPaint(size: const Size(26,26), painter: MissPainter()),
-                          const SizedBox(height: 4),
-                          const Text('불발', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (_st[r][4] != 0) ...[
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, 0),
-                  child: const Text('선택 취소(초기화)', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
+  // 칸을 누르면 팝업이 뜸: 가운데=관중, 둘레 8방향=빠진 방향(불발).
+  // 선택하면 팝업이 닫히며 칸에 표시되고, 5번째 칸이면 몰기/전불 이벤트도 확인함
+  Future<void> _pickShot(int r, int c) async {
+    final result = await showShotPicker(
+      context,
+      current: _st[r][c],
+      currentDir: _dirs[r][c],
+      title: '${c + 1}시 결과 선택',
     );
-    if (result != null) {
-      setState(() {
-        _st[r][4] = result;
-        _touchRow(r);
-      });
-      playArrowSound();
-      _saveTempDraft();
-      _checkRowCelebration(r);
-    }
+    if (result == null) return;
+    setState(() {
+      _st[r][c] = result.st;
+      _dirs[r][c] = result.st == 2 ? result.dir : 0;
+      _touchRow(r);
+    });
+    playArrowSound();
+    _saveTempDraft();
+    _checkRowCelebration(r);
   }
 
-  Widget _buildLastCell(int r) {
-    final v = _st[r][4];
-    return GestureDetector(
-      onTap: () => _pickLastShot(r),
-      child: Container(
-        height: 48,
-        decoration: BoxDecoration(
-          color: r % 2 == 0 ? Colors.white : const Color(0xFFF7FDFB),
-          border: Border.all(color: const Color(0xFF999999), width: 0.5),
-        ),
-        child: Center(
-          child: v == 1 ? CustomPaint(size: const Size(28,28), painter: HitPainter())
-               : v == 2 ? CustomPaint(size: const Size(28,28), painter: MissPainter())
-               : const SizedBox(),
-        ),
-      ),
-    );
-  }
+  Widget _buildLastCell(int r) => _buildCell(r, 4);
 
   Widget _buildCell(int r, int c) {
-    final v = _st[r][c];
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _st[r][c] = (_st[r][c] + 1) % 3;
-          _touchRow(r);
-        });
-        playArrowSound();
-        _saveTempDraft();
-        _checkRowCelebration(r);
-      },
+      onTap: () => _pickShot(r, c),
       child: Container(
         height: 48,
         decoration: BoxDecoration(
           color: r % 2 == 0 ? Colors.white : const Color(0xFFF7FDFB),
           border: Border.all(color: const Color(0xFF999999), width: 0.5),
         ),
-        child: Center(
-          child: v == 1 ? CustomPaint(size: const Size(28,28), painter: HitPainter())
-               : v == 2 ? CustomPaint(size: const Size(28,28), painter: MissPainter())
-               : const SizedBox(),
-        ),
-
+        child: Center(child: shotMark(_st[r][c], _dirs[r][c], 28)),
       ),
     );
   }
@@ -850,6 +764,159 @@ class _InputTabState extends State<InputTab> {
             border: Border.all(color: const Color(0xFF999999), width: 0.5)),
         child: Center(child: Text(text,
             style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F6E56), fontSize: 12)))));
+}
+
+
+// ══════════════════════════════════════════
+// 불발 방향 입력 (1=↖ 2=↑ 3=↗ 4=← 5=→ 6=↙ 7=↓ 8=↘)
+// ══════════════════════════════════════════
+List<List<int>> parseDirs(dynamic d) {
+  final out = List.generate(9, (_) => List.filled(5, 0));
+  if (d is List) {
+    for (int r = 0; r < 9 && r < d.length; r++) {
+      final row = d[r];
+      if (row is List) {
+        for (int c = 0; c < 5 && c < row.length; c++) {
+          final v = row[c];
+          if (v is int && v >= 0 && v <= 8) out[r][c] = v;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+List<List<int>> emptyDirs() => List.generate(9, (_) => List.filled(5, 0));
+
+class DirPainter extends CustomPainter {
+  final int dir;
+  final Color color;
+  DirPainter(this.dir, {this.color = const Color(0xFF1A237E)});
+
+  static const List<Offset> _vec = [
+    Offset(0, 0),
+    Offset(-1, -1), Offset(0, -1), Offset(1, -1),
+    Offset(-1, 0), Offset(1, 0),
+    Offset(-1, 1), Offset(0, 1), Offset(1, 1),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (dir < 1 || dir > 8) return;
+    var v = _vec[dir];
+    final len = v.distance;
+    v = Offset(v.dx / len, v.dy / len);
+    final c = size.center(Offset.zero);
+    final half = size.width * 0.40;
+    final start = c - v * half;
+    final end = c + v * half;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(start, end, paint);
+    final head = size.width * 0.30;
+    final left = Offset(-v.dy, v.dx);
+    final p1 = end - v * head + left * head * 0.6;
+    final p2 = end - v * head - left * head * 0.6;
+    canvas.drawLine(end, p1, paint);
+    canvas.drawLine(end, p2, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant DirPainter old) => old.dir != dir;
+}
+
+// 한 칸에 표시할 마크: 관중=中, 불발+방향=화살표, 방향 없는 불발=기존 불발 표시
+Widget shotMark(int v, int d, double size) {
+  if (v == 1) return CustomPaint(size: Size(size, size), painter: HitPainter());
+  if (v == 2) {
+    return CustomPaint(
+        size: Size(size, size),
+        painter: (d >= 1 && d <= 8) ? DirPainter(d) as CustomPainter : MissPainter());
+  }
+  return SizedBox(height: size);
+}
+
+// 입력 팝업: 가운데=관중, 둘레 8방향=빠진 방향. 결과 (st, dir). 바깥을 누르면 null(취소)
+Future<({int st, int dir})?> showShotPicker(BuildContext context,
+    {required int current, required int currentDir, String title = '결과 선택'}) {
+  const order = [1, 2, 3, 4, 0, 5, 6, 7, 8]; // 3x3 격자, 0=가운데(관중)
+  return showDialog<({int st, int dir})>(
+    context: context,
+    barrierColor: Colors.black45,
+    builder: (ctx) => Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+            const SizedBox(height: 4),
+            const Text('가운데=관중 / 화살표=빠진 방향',
+                style: TextStyle(fontSize: 11, color: Colors.grey)),
+            const SizedBox(height: 12),
+            for (int row = 0; row < 3; row++)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (int col = 0; col < 3; col++)
+                    Builder(builder: (_) {
+                      final k = order[row * 3 + col];
+                      final isCenter = k == 0;
+                      final selected = isCenter
+                          ? current == 1
+                          : (current == 2 && currentDir == k);
+                      return GestureDetector(
+                        onTap: () => Navigator.pop(
+                            ctx, isCenter ? (st: 1, dir: 0) : (st: 2, dir: k)),
+                        child: Container(
+                          width: 72, height: 72,
+                          margin: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: isCenter
+                                ? const Color(0xFFFCE4E0)
+                                : (selected ? const Color(0xFFD6DBF5) : const Color(0xFFF1F1F1)),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: selected ? const Color(0xFF1A237E) : Colors.grey.shade300,
+                                width: selected ? 2 : 1),
+                          ),
+                          child: Center(
+                            child: isCenter
+                                ? CustomPaint(size: const Size(34, 34), painter: HitPainter())
+                                : CustomPaint(size: const Size(34, 34), painter: DirPainter(k)),
+                          ),
+                        ),
+                      );
+                    }),
+                ],
+              ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, (st: 2, dir: 0)),
+                  child: const Text('불발(방향 모름)',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF444444))),
+                ),
+                if (current != 0)
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, (st: 0, dir: 0)),
+                    child: const Text('지우기', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class HitPainter extends CustomPainter {
@@ -1063,11 +1130,7 @@ class _RecordsTabState extends State<RecordsTab> {
                     child: Text(sunNames[r], style: const TextStyle(fontSize: 10, color: Color(0xFF085041))))))),
             for (int c = 0; c < 5; c++)
               TableCell(child: Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: rec.st[r][c] == 1
-                      ? CustomPaint(size: const Size(16,16), painter: HitPainter())
-                      : rec.st[r][c] == 2
-                          ? CustomPaint(size: const Size(16,16), painter: MissPainter())
-                          : const SizedBox(height: 16)))),
+                  child: shotMark(rec.st[r][c], rec.dirs[r][c], 16)))),
             TableCell(child: Container(color: const Color(0xFFE1F5EE),
                 child: Center(child: Text(rec.st[r].any((v)=>v!=0) ? '${rec.st[r].where((v)=>v==1).length}' : '',
                     style: const TextStyle(fontSize: 11, color: Color(0xFF0F6E56), fontWeight: FontWeight.w600))))),
@@ -1454,6 +1517,7 @@ class _SeungdanTabState extends State<SeungdanTab> {
   bool _isElderly = false;
   DateTime _selectedDate = DateTime.now();
   List<List<int>> _st = List.generate(9, (_) => List.filled(5, 0));
+  List<List<int>> _dirs = emptyDirs();
 
   static const Map<String,int> _gradeTargets = {
     '1급':22,'초단':24,'2단':26,'3단':28,'4단':30,'5단':31,'6단':33,'7단':35,'8단':37,'9단':39,
@@ -1471,6 +1535,7 @@ class _SeungdanTabState extends State<SeungdanTab> {
       _targetGrade = r.targetGrade ?? '초단';
       _isElderly = r.isElderly ?? false;
       _st = r.st.map((row) => List<int>.from(row)).toList();
+      _dirs = r.dirs.map((row) => List<int>.from(row)).toList();
     } else {
       _loadSettings();
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkTempDraft());
@@ -1488,6 +1553,7 @@ class _SeungdanTabState extends State<SeungdanTab> {
       'targetGrade': _targetGrade,
       'isElderly': _isElderly,
       'st': _st,
+      'dirs': _dirs,
     };
     await prefs.setString(_tempDraftKey, jsonEncode(draft));
   }
@@ -1531,6 +1597,7 @@ class _SeungdanTabState extends State<SeungdanTab> {
           _st = (draft['st'] as List)
               .map((row) => (row as List).map((v) => v as int).toList())
               .toList();
+          _dirs = parseDirs(draft['dirs']);
         });
       } catch (_) {
         // 임시 보관분이 손상되어 있으면 조용히 무시하고 삭제
@@ -1566,6 +1633,7 @@ class _SeungdanTabState extends State<SeungdanTab> {
       date: dateStr,
       round: '',
       st: _st.map((row) => List<int>.from(row)).toList(),
+      dirs: _dirs.map((row) => List<int>.from(row)).toList(),
       diary: '',
       total: _currentHits,
       isSeungdan: true,
@@ -1600,8 +1668,18 @@ class _SeungdanTabState extends State<SeungdanTab> {
   bool _rowHasAny(int r) => _st[r].any((v)=>v!=0);
   int _cumTotal(int r) { int t=0; for(int i=0;i<=r;i++) t+=_rowScore(i); return t; }
 
-  void _onCellTap(int r, int c) {
-    setState(() => _st[r][c] = (_st[r][c]+1)%3);
+  Future<void> _onCellTap(int r, int c) async {
+    final result = await showShotPicker(
+      context,
+      current: _st[r][c],
+      currentDir: _dirs[r][c],
+      title: '${c + 1}시 결과 선택',
+    );
+    if (result == null) return;
+    setState(() {
+      _st[r][c] = result.st;
+      _dirs[r][c] = result.st == 2 ? result.dir : 0;
+    });
     playArrowSound();
     _saveTempDraft();
     final hits = _st.fold(0,(s,row)=>s+row.where((v)=>v==1).length);
@@ -1630,7 +1708,10 @@ class _SeungdanTabState extends State<SeungdanTab> {
   }
 
   void _reset() {
-    setState(() => _st = List.generate(9, (_) => List.filled(5, 0)));
+    setState(() {
+      _st = List.generate(9, (_) => List.filled(5, 0));
+      _dirs = emptyDirs();
+    });
     _clearTempDraft();
   }
 
@@ -1816,7 +1897,6 @@ class _SeungdanTabState extends State<SeungdanTab> {
   );
 
   Widget _buildCell(int r, int c) {
-    final v = _st[r][c];
     return GestureDetector(
       onTap: () => _onCellTap(r, c),
       child: Container(
@@ -1826,9 +1906,7 @@ class _SeungdanTabState extends State<SeungdanTab> {
           border: Border.all(color: const Color(0xFF999999), width: 0.5),
         ),
         child: Center(
-          child: v==1 ? CustomPaint(size: const Size(28,28), painter: HitPainter())
-               : v==2 ? CustomPaint(size: const Size(28,28), painter: MissPainter())
-               : const SizedBox(),
+          child: shotMark(_st[r][c], _dirs[r][c], 28),
         ),
       ),
     );
